@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::parser::json::Json;
 
 pub struct Reader<'a> {
@@ -22,12 +24,65 @@ impl<'a> Reader<'a> {
             self.read_bool()
         } else if self.is_string_begin(b) {
             self.read_string()
+        } else if self.is_object_begin(b) {
+            self.read_object()
         } else {
             return Err(ReaderError::InvalidSyntax("Unsupported yet".to_string()));
         }
     }
 
+    fn read_object(&mut self) -> Result<Json, ReaderError> {
+        // Пропускаем начало объекта
+        self.next();
+
+        let mut content: BTreeMap<String, Json> = BTreeMap::new();
+
+        loop {
+            if !self.has_next() {
+                return Err(ReaderError::UnexpectedEof);
+            }
+
+            let next_byte = self.peek();
+
+            match next_byte {
+                // Встретили закрытие объекта — парсинг окончен
+                b'}' => {
+                    self.next();
+                    break;
+                }
+                // Встретили запятую — переходим к следующему элементу
+                b',' => {
+                    self.next();
+                }
+
+                _ => {
+                    let key = self.read_raw_string()?;
+                    if self.next() != b':' {
+                        return Err(ReaderError::InvalidSyntax(
+                            "Invalid key-value pair".to_string(),
+                        ));
+                    }
+                    let value = self.read()?;
+
+                    content.insert(key, value);
+                }
+            }
+        }
+
+        Ok(Json::Object(content))
+    }
+
+    fn is_object_begin(&self, b: u8) -> bool {
+        b == b'{'
+    }
+
     fn read_string(&mut self) -> Result<Json, ReaderError> {
+        let string_result = self.read_raw_string()?;
+
+        Ok(Json::String(string_result))
+    }
+
+    fn read_raw_string(&mut self) -> Result<String, ReaderError> {
         // Пропускаем открывающую кавычку
         self.next();
 
@@ -74,12 +129,10 @@ impl<'a> Reader<'a> {
         }
 
         // В самом конце превращаем накопленные байты в валидную Rust-строку
-        let string_result = String::from_utf8(byte_buffer)
-            .map_err(|_| ReaderError::InvalidSyntax("Invalid UTF-8 sequence".to_string()))?;
-
-        Ok(Json::String(string_result))
+        String::from_utf8(byte_buffer)
+            .map_err(|_| ReaderError::InvalidSyntax("Invalid UTF-8 sequence".to_string()))
     }
-    
+
     fn is_string_begin(&self, b: u8) -> bool {
         b == b'"'
     }
@@ -309,20 +362,41 @@ mod tests {
             Err(ReaderError::InvalidSyntax("Invalid false bool".to_string()))
         );
     }
-    
+
     #[test]
     fn test_parse_string() {
         assert_eq!(parse("\"abc\""), Ok(Json::String("abc".to_string())));
     }
-    
+
     #[test]
     fn test_parse_string_new_line() {
-        assert_eq!(parse("\"abc\nfgd\""), Ok(Json::String("abc\nfgd".to_string())));
+        assert_eq!(
+            parse("\"abc\nfgd\""),
+            Ok(Json::String("abc\nfgd".to_string()))
+        );
     }
-    
+
     #[test]
     fn test_parse_string_escaped() {
-        assert_eq!(parse("\"abc\\\"fgd\""), Ok(Json::String("abc\"fgd".to_string())));
+        assert_eq!(
+            parse(r#""abc\"fgd""#),
+            Ok(Json::String(r#"abc"fgd"#.to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_object_empty() {
+        assert_eq!(parse("{}"), Ok(Json::Object(BTreeMap::new())));
+    }
+
+    #[test]
+    fn test_parse_object() {
+        let expected = Json::Object(BTreeMap::from([(
+            "abc".to_string(),
+            Json::String("xyz".to_string()),
+        )]));
+
+        assert_eq!(parse(r#"{"abc":"xyz"}"#), Ok(expected));
     }
 
     // #[test]
