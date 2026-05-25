@@ -20,9 +20,68 @@ impl<'a> Reader<'a> {
             self.read_number()
         } else if self.is_bool_begin(b) {
             self.read_bool()
+        } else if self.is_string_begin(b) {
+            self.read_string()
         } else {
             return Err(ReaderError::InvalidSyntax("Unsupported yet".to_string()));
         }
+    }
+
+    fn read_string(&mut self) -> Result<Json, ReaderError> {
+        // Пропускаем открывающую кавычку
+        self.next();
+
+        let mut byte_buffer = Vec::new();
+
+        loop {
+            if !self.has_next() {
+                return Err(ReaderError::UnexpectedEof);
+            }
+
+            let b = self.next();
+
+            match b {
+                // Встретили закрывающую кавычку — парсинг окончен
+                b'"' => break,
+
+                // Встретили экранирование — заменяем ДВА байта на ОДИН специальный
+                b'\\' => {
+                    if !self.has_next() {
+                        return Err(ReaderError::UnexpectedEof);
+                    }
+                    let escaped = self.next();
+                    match escaped {
+                        b'"' => byte_buffer.push(b'"'),
+                        b'\\' => byte_buffer.push(b'\\'),
+                        b'/' => byte_buffer.push(b'/'),
+                        b'b' => byte_buffer.push(8),     // Backspace
+                        b'f' => byte_buffer.push(12),    // Form feed
+                        b'n' => byte_buffer.push(b'\n'), // Перевод строки (10)
+                        b'r' => byte_buffer.push(b'\r'), // Возврат каретки (13)
+                        b't' => byte_buffer.push(b'\t'), // Табуляция (9)
+                        _ => {
+                            return Err(ReaderError::InvalidSyntax(
+                                "Invalid escape sequence".to_string(),
+                            ));
+                        }
+                    }
+                }
+
+                // Любой другой байт (включая части многобайтных символов UTF-8 вроде кириллицы)
+                // просто копируем как есть
+                _ => byte_buffer.push(b),
+            }
+        }
+
+        // В самом конце превращаем накопленные байты в валидную Rust-строку
+        let string_result = String::from_utf8(byte_buffer)
+            .map_err(|_| ReaderError::InvalidSyntax("Invalid UTF-8 sequence".to_string()))?;
+
+        Ok(Json::String(string_result))
+    }
+    
+    fn is_string_begin(&self, b: u8) -> bool {
+        b == b'"'
     }
 
     fn read_bool(&mut self) -> Result<Json, ReaderError> {
@@ -232,7 +291,10 @@ mod tests {
 
     #[test]
     fn test_invalid_true() {
-        assert_eq!(parse("tree"), Err(ReaderError::InvalidSyntax("Invalid true bool".to_string())));
+        assert_eq!(
+            parse("tree"),
+            Err(ReaderError::InvalidSyntax("Invalid true bool".to_string()))
+        );
     }
 
     #[test]
@@ -242,16 +304,29 @@ mod tests {
 
     #[test]
     fn test_invalid_false() {
-        assert_eq!(parse("falye"), Err(ReaderError::InvalidSyntax("Invalid false bool".to_string())));
+        assert_eq!(
+            parse("falye"),
+            Err(ReaderError::InvalidSyntax("Invalid false bool".to_string()))
+        );
+    }
+    
+    #[test]
+    fn test_parse_string() {
+        assert_eq!(parse("\"abc\""), Ok(Json::String("abc".to_string())));
+    }
+    
+    #[test]
+    fn test_parse_string_new_line() {
+        assert_eq!(parse("\"abc\nfgd\""), Ok(Json::String("abc\nfgd".to_string())));
+    }
+    
+    #[test]
+    fn test_parse_string_escaped() {
+        assert_eq!(parse("\"abc\\\"fgd\""), Ok(Json::String("abc\"fgd".to_string())));
     }
 
     // #[test]
     // fn test_null() {
     //     assert_eq!(parse("null"), Ok(Json::Null));
-    // }
-
-    // #[test]
-    // fn test_invalid_input() {
-    //     assert_eq!(parse("abc"), Err(ParseError::InvalidSyntax));
     // }
 }
