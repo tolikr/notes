@@ -231,8 +231,18 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_true() {
+        assert_eq!(parse("tree"), Err(ReaderError::InvalidSyntax("Invalid true bool".to_string())));
+    }
+
+    #[test]
     fn test_parse_false() {
         assert_eq!(parse("false"), Ok(Json::Bool(false)));
+    }
+
+    #[test]
+    fn test_invalid_false() {
+        assert_eq!(parse("falye"), Err(ReaderError::InvalidSyntax("Invalid false bool".to_string())));
     }
 
     // #[test]
