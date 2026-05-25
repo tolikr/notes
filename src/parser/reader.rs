@@ -18,9 +18,68 @@ impl<'a> Reader<'a> {
         let b = self.peek();
         if self.is_digit_begin(b) {
             self.read_number()
+        } else if self.is_bool_begin(b) {
+            self.read_bool()
         } else {
             return Err(ReaderError::InvalidSyntax("Unsupported yet".to_string()));
         }
+    }
+
+    fn read_bool(&mut self) -> Result<Json, ReaderError> {
+        let mut value = false;
+        let mut at_begining = true;
+        let mut true_bytes = b"true";
+        let mut false_bytes = b"false";
+        let mut assert_pos = 1;
+
+        loop {
+            if self.has_next() {
+                let next_char = self.next();
+                if next_char == b't' && at_begining {
+                    value = true;
+                    at_begining = false;
+                } else if next_char == b'f' && at_begining {
+                    value = false;
+                    at_begining = false;
+                } else {
+                    if at_begining {
+                        return Err(ReaderError::InvalidSyntax("Invalid bool".to_string()));
+                    } else {
+                        if (value) {
+                            if true_bytes[assert_pos] == next_char {
+                                if !assert_pos < true_bytes.len() {
+                                    break;
+                                }
+                                assert_pos += 1;
+                            } else {
+                                return Err(ReaderError::InvalidSyntax(
+                                    "Invalid true bool".to_string(),
+                                ));
+                            }
+                        } else {
+                            if false_bytes[assert_pos] == next_char {
+                                if !assert_pos < false_bytes.len() {
+                                    break;
+                                }
+                                assert_pos += 1;
+                            } else {
+                                return Err(ReaderError::InvalidSyntax(
+                                    "Invalid false bool".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(Json::Bool(value))
+    }
+
+    fn is_bool_begin(&self, b: u8) -> bool {
+        b == b't' || b == b'f'
     }
 
     fn read_number(&mut self) -> Result<Json, ReaderError> {
@@ -30,7 +89,7 @@ impl<'a> Reader<'a> {
         let mut fraction_part = 0; // Сюда копим цифры дроби как целое число
         let mut fraction_digits = 0; // Считаем количество знаков после точки
         let mut number = 0.0;
-        
+
         loop {
             if self.has_next() {
                 let next_digit = self.next();
@@ -51,7 +110,7 @@ impl<'a> Reader<'a> {
                     }
                 } else if next_digit == b'.' {
                     if is_fraqtion_part {
-                      return Err(ReaderError::InvalidSyntax("Invalid fraqtional".to_string()));
+                        return Err(ReaderError::InvalidSyntax("Invalid fraqtional".to_string()));
                     } else {
                         is_fraqtion_part = true;
                     }
@@ -137,7 +196,10 @@ mod tests {
 
     #[test]
     fn test_invalid_negative_digit() {
-        assert_eq!(parse("-5-5"), Err(ReaderError::InvalidSyntax("Invalid digit".to_string())));
+        assert_eq!(
+            parse("-5-5"),
+            Err(ReaderError::InvalidSyntax("Invalid digit".to_string()))
+        );
     }
 
     #[test]
@@ -152,12 +214,25 @@ mod tests {
 
     #[test]
     fn test_invalid_float_number() {
-        assert_eq!(parse("123.23.4"), Err(ReaderError::InvalidSyntax("Invalid fraqtional".to_string())));
+        assert_eq!(
+            parse("123.23.4"),
+            Err(ReaderError::InvalidSyntax("Invalid fraqtional".to_string()))
+        );
     }
 
     #[test]
     fn test_empty_input() {
         assert_eq!(parse(""), Err(ReaderError::EmptyInput));
+    }
+
+    #[test]
+    fn test_parse_true() {
+        assert_eq!(parse("true"), Ok(Json::Bool(true)));
+    }
+
+    #[test]
+    fn test_parse_false() {
+        assert_eq!(parse("false"), Ok(Json::Bool(false)));
     }
 
     // #[test]
