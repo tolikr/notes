@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::note::{note::Note, note_manager::NoteManager};
+
 pub struct Console;
 
 impl Console {
@@ -19,15 +21,29 @@ impl Console {
 
             match input_string.trim() {
                 "help" => {
-                    println!("Next command are available: help, list, add `theme` `text`, remove `theme`, clean, exit")
+                    println!(
+                        "Next command are available: help, list, add `theme` `text`, remove `theme`, clean, exit"
+                    )
+                }
+                "list" => match NoteManager::list() {
+                    Ok(notes) => {
+                        println!("Notes: \n");
+                        Note::display_list(notes)
+                    }
+                    Err(e) => {
+                        println!("Could not load list. {}", e)
+                    }
                 },
                 "exit" => {
                     println!("Exiting");
                     break;
-                },
+                }
                 _ => {
-                    println!("Unexpected command {}. Type `exit` to close app.", input_string);
-                },
+                    println!(
+                        "Unexpected command {}. Type `exit` to close app.",
+                        input_string
+                    );
+                }
             }
         }
     }

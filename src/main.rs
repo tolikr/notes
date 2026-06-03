@@ -1,5 +1,6 @@
 mod parser;
 mod input;
+mod note;
 
 use parser::reader::Reader;
 use input::console::Console;
