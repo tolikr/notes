@@ -2,7 +2,7 @@ pub struct NoteManager;
 
 use std::{
     fs::{File, OpenOptions},
-    io::{BufReader, Read, Write}, path::Path,
+    io::{BufReader, Read, Write}, path::{Path, PathBuf},
 };
 
 use crate::{note::note::Note, parser::reader::Reader};
@@ -11,18 +11,8 @@ impl NoteManager {
     const DATABASE: &str = "db.json";
 
     pub fn list() -> Result<Vec<Note>, Box<dyn std::error::Error>> {
-        if !Path::new(Self::DATABASE).exists() {
-             // Вместо File::open используем OpenOptions:
-            let mut file = OpenOptions::new()
-                .read(true) // Нам нужно читать из него данные
-                .write(true) // (Опционально) если потом захочешь записывать
-                .create(true) // Создать файл, если его не существует!
-                .open(Self::DATABASE)?;
-
-            file.write("[]".as_bytes())?;
-        }
-
-        let db = File::open(Self::DATABASE)?;
+        let db = Self::prepare_db()?;
+        let db = File::open(db)?;
 
         let mut buf_reader = BufReader::new(db);
 
@@ -41,5 +31,42 @@ impl NoteManager {
         })?;
 
         Ok(notes)
+    }
+
+    pub fn clean() -> Result<(), Box<dyn std::error::Error>> {
+        let db = Self::prepare_db()?;
+
+        std::fs::write(db, b"[]")?;
+
+        Ok(())
+    }
+
+    pub fn add(theme: String, text: String) -> Result<(), std::io::Error> {
+
+
+        Ok(())
+    }
+
+    pub fn remove(theme: &str) -> Result<(), std::io::Error> {
+
+
+        Ok(())
+    }
+
+    fn prepare_db() -> Result<PathBuf, std::io::Error> {
+        // Проверяем, существует ли путь
+        if !Path::new(Self::DATABASE).exists() {
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(Self::DATABASE)?;
+
+            // Используем write_all вместо write
+            file.write_all(b"[]")?; 
+        }
+
+        // Превращаем константу в PathBuf и оборачиваем в Ok
+        Ok(PathBuf::from(Self::DATABASE))
     }
 }
