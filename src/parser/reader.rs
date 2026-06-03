@@ -26,9 +26,50 @@ impl<'a> Reader<'a> {
             self.read_string()
         } else if self.is_object_begin(b) {
             self.read_object()
+        } else if self.is_array_begin(b) {
+            self.read_array()
         } else {
             return Err(ReaderError::InvalidSyntax("Unsupported yet".to_string()));
         }
+    }
+
+    fn read_array(&mut self) -> Result<Json, ReaderError> {
+        // Пропускаем начало массива
+        self.next();
+
+        let mut content: Vec<Json> = Vec::new();
+
+        loop {
+            if !self.has_next() {
+                return Err(ReaderError::UnexpectedEof);
+            }
+
+            let next_byte = self.peek();
+
+            match next_byte {
+                // Встретили закрытие объекта — парсинг окончен
+                b']' => {
+                    self.next();
+                    break;
+                }
+                // Встретили запятую — переходим к следующему элементу
+                b',' => {
+                    self.next();
+                }
+
+                _ => {
+                    let value = self.read()?;
+
+                    content.push(value);
+                }
+            }
+        }
+
+        Ok(Json::Array(content))
+    }
+
+    fn is_array_begin(&self, b: u8) -> bool {
+        b == b'['
     }
 
     fn read_object(&mut self) -> Result<Json, ReaderError> {
@@ -263,9 +304,19 @@ impl<'a> Reader<'a> {
     }
 
     fn next(&mut self) -> u8 {
-        let byte = self.bytes[self.pos];
+        let byte = self.peek();
         self.pos += 1;
         byte
+    }
+
+    fn skip_spaces(&mut self) {
+        loop {
+            let byte = self.peek();
+            match byte {
+                b' ' => if self.has_next() { self.pos += 1 } else { break },
+                _ => break
+            }
+        }
     }
 
     fn peek(&self) -> u8 {
@@ -397,6 +448,18 @@ mod tests {
         )]));
 
         assert_eq!(parse(r#"{"abc":"xyz"}"#), Ok(expected));
+    }
+    
+    #[test]
+    fn test_parse_array_empty() {
+        assert_eq!(parse("[]"), Ok(Json::Array(Vec::new())));
+    }
+
+    #[test]
+    fn test_parse_array() {
+        let expected = Json::Array(vec![Json::String("abc".to_string())]);
+
+        assert_eq!(parse(r#"["abc"]"#), Ok(expected));
     }
 
     // #[test]
