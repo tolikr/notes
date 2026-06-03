@@ -1,9 +1,11 @@
 mod parser;
+mod input;
 
 use parser::reader::Reader;
+use input::console::Console;
 
 fn main() {
-    println!("Hello, world!");
+    Console::run();
 
     let a = b"123";
 
