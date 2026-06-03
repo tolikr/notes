@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, Write};
 
 use crate::note::{note::Note, note_manager::NoteManager};
 
@@ -12,6 +12,9 @@ impl Console {
 
         loop {
             input_string.clear();
+
+            print!("> ");
+            io::stdout().flush().expect("Could not print welcome");
 
             io::stdin()
                 .read_line(&mut input_string)
