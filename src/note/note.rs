@@ -1,10 +1,10 @@
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
-use crate::parser::json::Json;
+use crate::parser::{json::Json, writer::Writer};
 
 pub struct Note {
-    theme: String,
-    text: String,
+    pub theme: String,
+    pub text: String,
 }
 
 impl Note {
@@ -34,6 +34,21 @@ impl Note {
                 _ => Err("Not an object".to_string()),
             })
             .collect() // Магия: если хоть один элемент вернет Err, весь collect вернет Err
+    }
+
+    pub fn to_buffer(notes: Vec<Note>) -> Vec<u8> {
+        let mut arr: Vec<Json> = Vec::new();
+
+        for note in notes {
+            let mut obj = BTreeMap::new();
+
+            obj.insert("theme".to_string(), Json::String(note.theme));
+            obj.insert("text".to_string(), Json::String(note.text));
+
+            arr.push(Json::Object(obj));
+        }
+
+        Writer::write(Json::Array(arr))
     }
 }
 
